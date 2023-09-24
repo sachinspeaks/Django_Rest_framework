@@ -1,4 +1,4 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view,permission_classes
 from rest_framework.response import Response
 from home.models  import *
 from home.serializer import *
@@ -7,6 +7,9 @@ from rest_framework import viewsets
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
+from rest_framework.authentication import TokenAuthentication, BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
+from django.core.paginator import Paginator
 
 
 class LoginAPI(APIView):
@@ -19,8 +22,11 @@ class LoginAPI(APIView):
         
         
         user=authenticate(username=serializer.data['username'],password=serializer.data['password'])
-        token,_=Token.objects.create(user=user)
-        return Response({'status':True,'mewssage':'user login successful','token':str(token)},status.HTTP_201_CREATED)
+        if not user:
+            return Response({"status":False,"message":"Invalid Credentials"},status.HTTP_401_UNAUTHORIZED)
+
+        token=Token.objects.create(user=user)
+        return Response({'status':True,'message':'user login successful','token':str(token)},status.HTTP_201_CREATED)
 
 
 
@@ -39,9 +45,21 @@ class RegisterAPI(APIView):
 
 
 class PersonAPI(APIView):
+    permission_classes=[IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
     def get(self,request):
-        objs=Person.objects.filter()
-        serializer=PersonSerializer(objs,many=True)
+        try:
+            objs=Person.objects.filter()
+            page=request.GET.get('page',1)
+            page_size=3
+            paginator=Paginator(objs,page_size)
+            print(paginator.page(page))
+            serializer=PersonSerializer(paginator.page(page),many=True)   
+        except Exception as e:
+            return Response({"status":False,"message":"Invalid Page Number"""})     
+
+
+        
         return Response(serializer.data)
     def post(self,request):
         data=request.data
